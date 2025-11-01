@@ -19,7 +19,7 @@ public class PlayerController : MonoBehaviour
 
     private void Awake()
     {
-
+    
         animator = GetComponent<Animator>();
     }
 
