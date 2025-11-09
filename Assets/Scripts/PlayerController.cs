@@ -7,6 +7,7 @@ public class PlayerController : MonoBehaviour
 {
     public float moveSpeed;
 
+    public static bool canMove = true;
     private bool isMoving;
 
     private Vector2 input;
@@ -25,6 +26,12 @@ public class PlayerController : MonoBehaviour
 
     public void HandleUpdate()
     {
+        if (!canMove)
+        {
+            animator.SetBool("isMoving", false);
+            return;
+        }
+        
         if (!isMoving)
         {
             input.x = Input.GetAxisRaw("Horizontal");
