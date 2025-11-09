@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -10,9 +11,11 @@ public class MaxAIController : MonoBehaviour, Interactable
     [SerializeField] GameObject dialogBox;
     [SerializeField] Text dialogText;
     [SerializeField] InputField inputField;
+    [SerializeField] Dialog dialog;
 
     private bool isDialogOpen = false;
     private bool isWaitingForResponse = false;
+    private int currentLine = 0;
 
     public void Interact()
     {
@@ -25,7 +28,7 @@ public class MaxAIController : MonoBehaviour, Interactable
             inputField.ActivateInputField();
             isDialogOpen = true;
 
-            PlayerController.canMove = false; // 🔒 Spieler darf sich nicht bewegen
+            PlayerController.canMove = false;
         }
     }
 
@@ -42,19 +45,36 @@ public class MaxAIController : MonoBehaviour, Interactable
             }
         }
 
-        // ESC → Dialog schließen + Bewegung wieder aktivieren
+        // 🔹 L → nächste Seite anzeigen
+        if (isDialogOpen && Input.GetKeyDown(KeyCode.L) && !isWaitingForResponse)
+        {
+            if (dialog != null && dialog.Lines != null && dialog.Lines.Count > 0)
+            {
+                currentLine++;
+                if (currentLine < dialog.Lines.Count)
+                {
+                    dialogText.text = dialog.Lines[currentLine] ;
+                }
+                else
+                {
+                    dialogText.text = "\n(Drücke ESC zum Schließen)";
+                }
+            }
+        }
+
+        // 🔹 ESC → schließen
         if (isDialogOpen && Input.GetKeyDown(KeyCode.Escape))
         {
             dialogBox.SetActive(false);
             isDialogOpen = false;
-            PlayerController.canMove = true; // 🔓 Spieler darf sich wieder bewegen
+            PlayerController.canMove = true;
         }
     }
 
     IEnumerator SendToOllama(string prompt)
     {
         isWaitingForResponse = true;
-        inputField.gameObject.SetActive(false); // Eingabe ausblenden
+        inputField.gameObject.SetActive(false);
         dialogText.text = "Max denkt nach...";
 
         var url = "http://localhost:11434/api/generate";
@@ -89,30 +109,61 @@ public class MaxAIController : MonoBehaviour, Interactable
                     {
                         string part = line.Substring(start, end - start);
                         responseBuilder.Append(part);
-                        dialogText.text = responseBuilder.ToString();
-                        yield return new WaitForSeconds(0.02f); // Text-Effekt
                     }
                 }
             }
 
             string finalResponse = responseBuilder.ToString();
+
             if (string.IsNullOrEmpty(finalResponse))
+            {
                 dialogText.text = "Keine Antwort erhalten 😕";
+            }
             else
-                dialogText.text = finalResponse;
+            {
+                // 🔹 Text automatisch in mehrere Seiten aufteilen
+                dialog = new Dialog();
+                var lines = SplitTextIntoPages(finalResponse, 25); // ca. 2-3 Zeilen pro Seite
+                typeof(Dialog).GetField("lines", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                    .SetValue(dialog, lines);
+
+                currentLine = 0;
+                dialogText.text = lines[0] ;
+            }
         }
 
-        // Hinweis einblenden
-        dialogText.text += "\n\n(Drücke Enter, um weiterzumachen...)";
-
-        // Warte auf Enter → Eingabefeld wieder anzeigen
-        yield return new WaitUntil(() => Input.GetKeyDown(KeyCode.Return));
-
-        inputField.gameObject.SetActive(true);
-        inputField.ActivateInputField();
-
         isWaitingForResponse = false;
-        // ❌ Kein PlayerController.canMove = true hier!
-        // Bewegung bleibt gesperrt, bis Spieler mit ESC den Dialog verlässt
+    }
+
+    // 🔹 Verbesserte Funktion: teilt Text in sinnvolle Seiten
+    private List<string> SplitTextIntoPages(string text, int maxWordsPerPage = 25)
+    {
+        List<string> pages = new List<string>();
+        if (string.IsNullOrEmpty(text))
+            return pages;
+
+        string[] words = text.Split(' ');
+        StringBuilder currentPage = new StringBuilder();
+        int wordCount = 0;
+
+        foreach (var word in words)
+        {
+            currentPage.Append(word + " ");
+            wordCount++;
+
+            // Wenn zu viele Wörter → Seite speichern
+            if (wordCount >= maxWordsPerPage)
+            {
+                pages.Add(currentPage.ToString().Trim());
+                currentPage.Clear();
+                wordCount = 0;
+            }
+        }
+
+        // Letzte Seite anhängen
+        if (currentPage.Length > 0)
+            pages.Add(currentPage.ToString().Trim());
+
+        return pages;
     }
 }
