@@ -367,7 +367,7 @@ Transform:
   m_GameObject: {fileID: 97413187}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -1.6812396, y: 9.212683, z: 0}
+  m_LocalPosition: {x: 2.64, y: 10.58, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -168299,7 +168299,7 @@ Transform:
   m_GameObject: {fileID: 1575067589}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 11.71, y: 8.93, z: 0}
+  m_LocalPosition: {x: 12.84, y: 10.41, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -168398,7 +168398,7 @@ Transform:
   m_GameObject: {fileID: 1790339297}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 8, y: 10, z: 0}
+  m_LocalPosition: {x: 7.79, y: 10.48, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -179108,7 +179108,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 93e41da23f4a5374c9c67d01456895e7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  moveSpeed: 10
+  moveSpeed: 6
   interactableLayer:
     serializedVersion: 2
     m_Bits: 256
