@@ -100,6 +100,37 @@ public static class CreateTom
 
             so.ApplyModifiedProperties();
 
+            // Try to auto-wire Dialog UI from DialogManager (if present in scene) into TomAIController using reflection
+            try
+            {
+                var dm = UnityEngine.Object.FindObjectOfType<DialogManager>();
+                if (dm != null && tomAI != null)
+                {
+                    var dmType = typeof(DialogManager);
+                    var dmDialogBoxField = dmType.GetField("dialogBox", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    var dmDialogTextField = dmType.GetField("dialogText", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+                    GameObject dmDialogBox = dmDialogBoxField != null ? (GameObject)dmDialogBoxField.GetValue(dm) : null;
+                    UnityEngine.UI.Text dmDialogText = dmDialogTextField != null ? (UnityEngine.UI.Text)dmDialogTextField.GetValue(dm) : null;
+
+                    var tomType = tomAI.GetType();
+                    var tomDialogBoxField = tomType.GetField("dialogBox", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    var tomDialogTextField = tomType.GetField("dialogText", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    var tomInputFieldField = tomType.GetField("inputField", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+                    if (tomDialogBoxField != null && dmDialogBox != null) tomDialogBoxField.SetValue(tomAI, dmDialogBox);
+                    if (tomDialogTextField != null && dmDialogText != null) tomDialogTextField.SetValue(tomAI, dmDialogText);
+                    if (tomInputFieldField != null && dmDialogBox != null)
+                    {
+                        var input = dmDialogBox.GetComponentInChildren<UnityEngine.UI.InputField>(true);
+                        if (input != null) tomInputFieldField.SetValue(tomAI, input);
+                    }
+
+                    Debug.Log("CreateTom: Wired DialogManager UI to TomAIController (if available).");
+                }
+            }
+            catch (Exception) { }
+
             // If the scene object has no collider but has a SpriteRenderer, try to size a BoxCollider2D on the Sprite's GameObject
             var existingCol = tomGO.GetComponentInChildren<Collider2D>();
             if (existingCol == null)

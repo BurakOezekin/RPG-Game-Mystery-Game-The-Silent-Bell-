@@ -1,7 +1,12 @@
 using System.Collections;
+using System.Collections.Generic;
+using System.Text;
+using System.IO;
 using UnityEngine;
+using UnityEngine.Networking;
+using UnityEngine.UI;
 
-public class TomAIController : MonoBehaviour
+public class TomAIController : MonoBehaviour, Interactable
 {
     [Header("Waypoints (set in inspector or use defaults)")]
     public Vector3[] waypoints = new Vector3[] {
@@ -20,6 +25,23 @@ public class TomAIController : MonoBehaviour
     private Coroutine routine;
     private Animator animator;
     private Rigidbody2D rb2d;
+
+    // --- Dialog / Gemini fields (adapted from MaxAIController) ---
+    [Header("Dialog (optional)")]
+    [SerializeField] GameObject dialogBox;
+    [SerializeField] Text dialogText;
+    [SerializeField] InputField inputField;
+    private Dialog dialog;
+
+    [Header("Gemini API Configuration (optional)")]
+    [SerializeField] private string geminiApiKey = "";
+    [SerializeField] private string geminiModel = "gemini-2.0-flash";
+    [SerializeField] private string geminiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+    [SerializeField] private string geminiEnvVarName = "GEMINI_API_KEY";
+
+    private bool isDialogOpen = false;
+    private bool isWaitingForResponse = false;
+    private int currentLine = 0;
 
     void Awake()
     {
@@ -121,6 +143,373 @@ public class TomAIController : MonoBehaviour
         if (routine != null) StopCoroutine(routine);
         routine = null;
         UpdateAnimatorMovement(Vector3.zero);
+    }
+
+    // --- Interactable implementation (opens dialog + Gemini) ---
+    public void Interact()
+    {
+        if (!isDialogOpen)
+        {
+            // pause patrol and player
+            StopPatrol();
+
+            if (dialogBox != null)
+            {
+                dialogBox.SetActive(true);
+                if (dialogText != null) dialogText.text = "Hallo, ich bin Tom! Frag mich etwas:";
+                if (inputField != null)
+                {
+                    inputField.text = "";
+                    inputField.gameObject.SetActive(true);
+                    inputField.ActivateInputField();
+                }
+            }
+
+            isDialogOpen = true;
+            PlayerController.canMove = false;
+        }
+    }
+
+    void Update()
+    {
+        // ENTER → Anfrage senden
+        if (isDialogOpen && Input.GetKeyDown(KeyCode.Return) && !isWaitingForResponse)
+        {
+            string prompt = inputField != null ? inputField.text.Trim() : "";
+            if (prompt.Length > 0)
+            {
+                if (inputField != null) inputField.text = "";
+                StartCoroutine(SendToApi(prompt));
+            }
+        }
+
+        // L → nächste Seite
+        if (isDialogOpen && Input.GetKeyDown(KeyCode.L) && !isWaitingForResponse)
+        {
+            if (dialog != null && dialog.Lines != null && dialog.Lines.Count > 0)
+            {
+                currentLine++;
+                if (currentLine < dialog.Lines.Count)
+                {
+                    if (dialogText != null) dialogText.text = dialog.Lines[currentLine];
+                }
+                else
+                {
+                    if (dialogText != null) dialogText.text = "\n(Drücke ESC zum Schließen)";
+                }
+            }
+        }
+
+        // ESC → schließen
+        if (isDialogOpen && Input.GetKeyDown(KeyCode.Escape))
+        {
+            if (dialogBox != null) dialogBox.SetActive(false);
+            isDialogOpen = false;
+            PlayerController.canMove = true;
+            // resume patrol
+            StartPatrol();
+        }
+    }
+
+    IEnumerator SendToApi(string prompt)
+    {
+        isWaitingForResponse = true;
+        if (inputField != null) inputField.gameObject.SetActive(false);
+        if (dialogText != null) dialogText.text = "Tom denkt nach...";
+
+        string body = "{\"contents\":[{\"parts\":[{\"text\":\"" + prompt.Replace("\"", "\\\"") + "\"}]}]}";
+
+        var request = new UnityWebRequest(geminiUrl, "POST");
+        byte[] bodyRaw = Encoding.UTF8.GetBytes(body);
+        request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+        request.downloadHandler = new DownloadHandlerBuffer();
+        request.SetRequestHeader("Content-Type", "application/json");
+
+        string apiKey = null;
+#if UNITY_EDITOR
+        try
+        {
+            string secretsPath = Path.Combine(Application.dataPath, "..", "Secrets", "gemini_key.txt");
+            if (File.Exists(secretsPath))
+            {
+                apiKey = File.ReadAllText(secretsPath).Trim();
+                if (!string.IsNullOrEmpty(apiKey))
+                {
+                    Debug.Log("[TomAIController] Loaded Gemini API key from Secrets/gemini_key.txt (Editor-only).");
+                }
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning("[TomAIController] Failed reading Secrets/gemini_key.txt: " + ex.Message);
+        }
+#endif
+
+        if (string.IsNullOrEmpty(apiKey) && !string.IsNullOrEmpty(geminiEnvVarName))
+        {
+            apiKey = System.Environment.GetEnvironmentVariable(geminiEnvVarName);
+            if (!string.IsNullOrEmpty(apiKey))
+            {
+                Debug.Log("[TomAIController] Loaded Gemini API key from environment variable '" + geminiEnvVarName + "'.");
+            }
+        }
+
+        if (string.IsNullOrEmpty(apiKey))
+        {
+            apiKey = geminiApiKey;
+            if (!string.IsNullOrEmpty(apiKey))
+            {
+                Debug.Log("[TomAIController] Using Gemini API key from Inspector (fallback).");
+            }
+        }
+
+        bool hasApiKey = !string.IsNullOrEmpty(apiKey);
+        Debug.Log($"[TomAIController] Gemini API key present: {hasApiKey}");
+        if (hasApiKey)
+        {
+            request.SetRequestHeader("X-goog-api-key", apiKey);
+        }
+        else
+        {
+            Debug.LogWarning($"Gemini API key not set. Provide a key via Secrets/gemini_key.txt (Editor), environment variable '{geminiEnvVarName}', or Inspector field.");
+        }
+
+        Debug.Log($"[TomAIController] Sending request to: {geminiUrl}");
+        Debug.Log($"[TomAIController] Request model: {geminiModel}");
+
+        yield return request.SendWebRequest();
+
+        Debug.Log($"[TomAIController] request.result={request.result}, responseCode={request.responseCode}, error={request.error}");
+        string text = request.downloadHandler != null ? request.downloadHandler.text : null;
+        Debug.Log($"[TomAIController] response body: {text}");
+
+        string finalResponse = null;
+
+        if (!string.IsNullOrEmpty(text))
+        {
+            try
+            {
+                finalResponse = ParseGeminiContent(text);
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning("[TomAIController] ParseGeminiContent threw: " + ex.Message);
+                finalResponse = null;
+            }
+
+            if (string.IsNullOrEmpty(finalResponse))
+            {
+                try
+                {
+                    var matches = System.Text.RegularExpressions.Regex.Matches(text, "\"(text|content|message|generatedText)\"\\s*:\\s*\"([^\"]{2,})\",");
+                    if (matches != null && matches.Count > 0)
+                    {
+                        StringBuilder sb = new StringBuilder();
+                        foreach (System.Text.RegularExpressions.Match m in matches)
+                        {
+                            if (m.Groups.Count >= 3)
+                            {
+                                if (sb.Length > 0) sb.Append(" ");
+                                sb.Append(m.Groups[2].Value);
+                            }
+                        }
+                        finalResponse = sb.ToString();
+                    }
+                }
+                catch { }
+
+                if (string.IsNullOrEmpty(finalResponse))
+                {
+                    try
+                    {
+                        var any = System.Text.RegularExpressions.Regex.Matches(text, "\"([^\"]{20,})\"");
+                        if (any != null && any.Count > 0)
+                        {
+                            string longest = "";
+                            foreach (System.Text.RegularExpressions.Match m in any)
+                            {
+                                if (m.Groups.Count >= 2)
+                                {
+                                    string v = m.Groups[1].Value;
+                                    if (v.Length > longest.Length) longest = v;
+                                }
+                            }
+                            if (!string.IsNullOrEmpty(longest)) finalResponse = longest;
+                        }
+                    }
+                    catch { }
+                }
+
+                if (string.IsNullOrEmpty(finalResponse))
+                {
+                    finalResponse = text;
+                }
+            }
+        }
+
+        if (request.result != UnityWebRequest.Result.Success)
+        {
+            if (dialogText != null) dialogText.text = "Fehler: " + request.error;
+            if (request.responseCode == 403)
+            {
+                if (!hasApiKey)
+                {
+                    Debug.LogError("[TomAIController] 403 PERMISSION_DENIED and no API key was provided. Set the GEMINI API key.");
+                }
+                else
+                {
+                    Debug.Log("[TomAIController] Received 403 Forbidden despite API key; retrying with key as query param.");
+                    string urlWithKey = geminiUrl + (geminiUrl.Contains("?") ? "&" : "?") + "key=" + System.Uri.EscapeDataString(apiKey);
+
+                    var retryReq = new UnityWebRequest(urlWithKey, "POST");
+                    retryReq.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
+                    retryReq.downloadHandler = new DownloadHandlerBuffer();
+                    retryReq.SetRequestHeader("Content-Type", "application/json");
+
+                    yield return retryReq.SendWebRequest();
+                    Debug.Log($"[TomAIController] retry.request.result={retryReq.result}, responseCode={retryReq.responseCode}, error={retryReq.error}");
+                    string retryText = retryReq.downloadHandler != null ? retryReq.downloadHandler.text : null;
+                    Debug.Log($"[TomAIController] retry response body: {retryText}");
+
+                    if (!string.IsNullOrEmpty(retryText))
+                    {
+                        try { finalResponse = ParseGeminiContent(retryText); } catch { finalResponse = null; }
+                    }
+
+                    if (retryReq.result == UnityWebRequest.Result.Success && !string.IsNullOrEmpty(finalResponse))
+                    {
+                        dialog = new Dialog();
+                        finalResponse = UnescapeCommonSequences(finalResponse);
+                        var lines = SplitTextIntoPages(finalResponse, 25);
+                        typeof(Dialog).GetField("lines", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                            .SetValue(dialog, lines);
+                        currentLine = 0;
+                        if (dialogText != null) dialogText.text = lines[0];
+                        isWaitingForResponse = false;
+                        yield break;
+                    }
+                    else
+                    {
+                        Debug.LogError("[TomAIController] Retry with API key (query param) failed or returned no content.");
+                    }
+                }
+            }
+        }
+        else if (string.IsNullOrEmpty(finalResponse))
+        {
+            if (!string.IsNullOrEmpty(text))
+            {
+                var pretty = UnescapeCommonSequences(text);
+                if (dialogText != null) dialogText.text = pretty.Length > 1000 ? pretty.Substring(0, 1000) + "..." : pretty;
+            }
+            else
+            {
+                if (dialogText != null) dialogText.text = "Keine Antwort erhalten 😕";
+            }
+        }
+        else
+        {
+            dialog = new Dialog();
+            finalResponse = UnescapeCommonSequences(finalResponse);
+            var lines = SplitTextIntoPages(finalResponse, 25);
+            typeof(Dialog).GetField("lines", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .SetValue(dialog, lines);
+
+            currentLine = 0;
+            if (dialogText != null) dialogText.text = lines[0];
+        }
+
+        isWaitingForResponse = false;
+    }
+
+    private string ParseGeminiContent(string json)
+    {
+        if (string.IsNullOrEmpty(json))
+            return null;
+        try
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(json, "\"text\"\\s*:\\s*\"([^\"]+)\"");
+            if (m.Success && m.Groups.Count >= 2) return m.Groups[1].Value;
+
+            m = System.Text.RegularExpressions.Regex.Match(json, "\"generatedText\"\\s*:\\s*\"([^\"]+)\"");
+            if (m.Success && m.Groups.Count >= 2) return m.Groups[1].Value;
+
+            m = System.Text.RegularExpressions.Regex.Match(json, "\"message\"\\s*:\\s*\"([^\"]+)\"");
+            if (m.Success && m.Groups.Count >= 2) return m.Groups[1].Value;
+
+            m = System.Text.RegularExpressions.Regex.Match(json, "\"content\"\\s*:\\s*\"([^\"]+)\"");
+            if (m.Success && m.Groups.Count >= 2) return m.Groups[1].Value;
+
+            m = System.Text.RegularExpressions.Regex.Match(json, "\"parts\"\\s*:\\s*\\[.*?\"text\"\\s*:\\s*\"([^\"]+)\"", System.Text.RegularExpressions.RegexOptions.Singleline);
+            if (m.Success && m.Groups.Count >= 2) return m.Groups[1].Value;
+
+            m = System.Text.RegularExpressions.Regex.Match(json, "\"candidates\"\\s*:\\s*\\[.*?\"content\"\\s*:\\s*\\[.*?\"text\"\\s*:\\s*\"([^\"]+)\"", System.Text.RegularExpressions.RegexOptions.Singleline);
+            if (m.Success && m.Groups.Count >= 2) return m.Groups[1].Value;
+
+            var matches = System.Text.RegularExpressions.Regex.Matches(json, "\"(text|content|message|generatedText)\"\\s*:\\s*\"([^\"]{2,})\"");
+            if (matches != null && matches.Count > 0)
+            {
+                StringBuilder sb = new StringBuilder();
+                foreach (System.Text.RegularExpressions.Match mm in matches)
+                {
+                    if (mm.Groups.Count >= 3)
+                    {
+                        if (sb.Length > 0) sb.Append(" ");
+                        sb.Append(mm.Groups[2].Value);
+                    }
+                }
+                return sb.ToString();
+            }
+        }
+        catch { }
+
+        return null;
+    }
+
+    private string UnescapeCommonSequences(string s)
+    {
+        if (string.IsNullOrEmpty(s))
+            return s;
+
+        try
+        {
+            s = s.Replace("\\r\\n", "\n").Replace("\\n", "\n").Replace("\\r", "\n");
+            s = s.Replace("\\t", "    ");
+            s = s.Replace("\\\"", "\"");
+            s = s.Replace("\\\\", "\\");
+        }
+        catch { }
+
+        return s;
+    }
+
+    private List<string> SplitTextIntoPages(string text, int maxWordsPerPage = 25)
+    {
+        List<string> pages = new List<string>();
+        if (string.IsNullOrEmpty(text))
+            return pages;
+
+        string[] words = text.Split(' ');
+        StringBuilder currentPage = new StringBuilder();
+        int wordCount = 0;
+
+        foreach (var word in words)
+        {
+            currentPage.Append(word + " ");
+            wordCount++;
+
+            if (wordCount >= maxWordsPerPage)
+            {
+                pages.Add(currentPage.ToString().Trim());
+                currentPage.Clear();
+                wordCount = 0;
+            }
+        }
+
+        if (currentPage.Length > 0)
+            pages.Add(currentPage.ToString().Trim());
+
+        return pages;
     }
 
     void OnDrawGizmosSelected()

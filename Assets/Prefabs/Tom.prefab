@@ -285,3 +285,10 @@ MonoBehaviour:
   speed: 2
   waitTime: 1
   startOnAwake: 1
+  dialogBox: {fileID: 0}
+  dialogText: {fileID: 0}
+  inputField: {fileID: 0}
+  geminiApiKey: 
+  geminiModel: gemini-2.0-flash
+  geminiUrl: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent
+  geminiEnvVarName: GEMINI_API_KEY
