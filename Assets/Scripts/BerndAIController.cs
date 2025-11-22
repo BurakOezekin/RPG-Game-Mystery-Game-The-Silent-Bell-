@@ -89,34 +89,88 @@ public class BerndAIController : MonoBehaviour, Interactable
         isWaitingForResponse = true;
         inputField.gameObject.SetActive(false);
         dialogText.text = "Bernd denkt nach...";
+        bool promptStyled = false;
 
-        // Special-case: if the player asks about the "Glocke", return randomized hints locally
+        // Special-case: if the player asks about the "Glocke", return randomized hints locally or via Gemini
         if (!string.IsNullOrEmpty(prompt))
         {
             string lower = prompt.ToLower();
             if (lower.Contains("glocke") || lower.Contains("glocke?"))
             {
-                string[] bellResponses = new string[] {
+                // Local hint variations
+                string[] bellLocal = new string[] {
                     "Lauf den Flur entlang — vielleicht siehst du etwas.",
                     "Schau im Glockenturm nach, dort könnte sie verborgen sein.",
                     "Versuch den Innenhof; ich habe dort vor Kurzem etwas gehört.",
                     "Geh nach Norden und halte Ausschau nach einer großen Tür.",
-                    "Vielleicht findest du Hinweise in der Kapelle."
+                    "Vielleicht findest du Hinweise in der Kapelle.",
+                    "Auf dem Weg dorthin siehst du vielleicht eine offene Luke.",
+                    "Folge den Glockenschlägen, sie führen dich näher.",
+                    "Sie wurde zuletzt in der Nähe des alten Zauns gesehen.",
+                    "Man sagt, etwas funkelt bei Mondschein am Tor zum Kirchhof.",
+                    "Schau hinter dem Altar — dort verstecken sich manchmal Dinge."
                 };
 
-                int idx = Random.Range(0, bellResponses.Length);
-                string berndResponse = bellResponses[idx];
+                string[] bellPrefixes = new string[] {
+                    "Auf dem Weg: ",
+                    "Vielleicht: ",
+                    "Tipp: ",
+                    "Kleiner Hinweis: ",
+                    "Pssst — denk daran: "
+                };
 
-                // Create dialog pages and show first page
-                dialog = new Dialog();
-                berndResponse = UnescapeCommonSequences(berndResponse);
-                var lines = SplitTextIntoPages(berndResponse, 25);
-                typeof(Dialog).GetField("lines", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                    .SetValue(dialog, lines);
-                currentLine = 0;
-                dialogText.text = lines[0];
-                isWaitingForResponse = false;
-                yield break;
+                float roll = UnityEngine.Random.value;
+                // 70% chance to use a local, canned hint; 30% to ask Gemini to craft a varied hint
+                if (roll < 0.7f)
+                {
+                    int idx = UnityEngine.Random.Range(0, bellLocal.Length);
+                    int p = UnityEngine.Random.Range(0, bellPrefixes.Length);
+                    string berndResponse = bellPrefixes[p] + bellLocal[idx];
+
+                    // Create dialog pages and show first page
+                    dialog = new Dialog();
+                    berndResponse = UnescapeCommonSequences(berndResponse);
+                    var lines = SplitTextIntoPages(berndResponse, 25);
+                    typeof(Dialog).GetField("lines", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                        .SetValue(dialog, lines);
+                    currentLine = 0;
+                    dialogText.text = lines[0];
+                    isWaitingForResponse = false;
+                    yield break;
+                }
+                else
+                {
+                    // Ask Gemini for a varied hint style; append an instruction to be brief and slightly vague
+                    string[] geminiStyles = new string[] {
+                        "Antworte kurz und rätselhaft auf Deutsch: ",
+                        "Gib einen freundlichen, vagen Hinweis auf Deutsch: ",
+                        "Sei als NPC kurz und hilfreich, antworte auf Deutsch: ",
+                        "Formuliere einen kurzen Tipp auf Deutsch, ohne genaue Orte zu verraten: "
+                    };
+                    string style = geminiStyles[UnityEngine.Random.Range(0, geminiStyles.Length)];
+                    prompt = style + "Wo könnte die Glocke in diesem Gebiet versteckt sein?";
+                    promptStyled = true;
+                    // continue to the Gemini request path below using modified prompt
+                }
+            }
+        }
+
+        // (the bell branch above may have already modified `prompt` and set `promptStyled`)
+        // If not already styled, choose a random style for the Gemini prompt to vary responses
+        if (!promptStyled)
+        {
+            string[] generalStyles = new string[] {
+                "Antworte kurz, freundlich und hilfreich auf Deutsch: ",
+                "Gib eine kurze, rätselhafte Antwort auf Deutsch: ",
+                "Sei locker und knapp, antworte auf Deutsch: ",
+                "Formuliere einen prägnanten Tipp auf Deutsch: ",
+                "Antwort als NPC Bernd, kurz und höflich, auf Deutsch: "
+            };
+            // small chance to not style (pure question)
+            if (UnityEngine.Random.value < 0.85f)
+            {
+                string chosen = generalStyles[UnityEngine.Random.Range(0, generalStyles.Length)];
+                prompt = chosen + prompt;
             }
         }
 
