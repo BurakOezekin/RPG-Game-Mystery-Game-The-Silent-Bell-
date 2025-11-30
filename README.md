@@ -17,13 +17,13 @@ This project now uses the Google Generative (Gemini) REST API for in-game AI res
 1. Set the environment variable in PowerShell for the current session (works if you start Unity from the same shell):
 
 ```powershell
-$env:GEMINI_API_KEY="AIzaSyBH10ztKrPAGAYKzHjVv1H_6H7Z7trpmGs"
+$env:GEMINI_API_KEY="key"
 ```
 
 2. Or persist the variable (Windows) so it is available after restarting Unity (requires restarting Unity):
 
 ```powershell
-setx GEMINI_API_KEY "AIzaSyBH10ztKrPAGAYKzHjVv1H_6H7Z7trpmGs"
+setx GEMINI_API_KEY "key"
 ```
 
 3. In the Unity Editor:
