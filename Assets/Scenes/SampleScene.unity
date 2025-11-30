@@ -367,7 +367,7 @@ Transform:
   m_GameObject: {fileID: 97413187}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 1.85, y: 10.53, z: 0}
+  m_LocalPosition: {x: 35.67, y: -5.29, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -395,6 +395,13 @@ MonoBehaviour:
   geminiModel: gemini-2.0-flash
   geminiUrl: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent
   geminiEnvVarName: GEMINI_API_KEY
+  bellObject: {fileID: 583985182}
+  secretCodeWord: sturmglocke
+  riddleAnswers:
+  - glocke
+  - bell
+  - turm
+  - tower
 --- !u!1 &188637343
 GameObject:
   m_ObjectHideFlags: 0
@@ -552,7 +559,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &583985183
 Transform:
   m_ObjectHideFlags: 0
@@ -167970,6 +167977,56 @@ Rigidbody2D:
   m_SleepingMode: 1
   m_CollisionDetection: 0
   m_Constraints: 0
+--- !u!1 &1158046969
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1158046971}
+  - component: {fileID: 1158046970}
+  m_Layer: 0
+  m_Name: QuestManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1158046970
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1158046969}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 843d2a55c8be17948a3699a56a7b954b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  talkedToPeter: 0
+  talkedToBernd: 0
+  talkedToTom: 0
+  talkedToMax: 0
+  bellRevealed: 0
+  bellCollected: 0
+--- !u!4 &1158046971
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1158046969}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 33.873318, y: -5.193923, z: 0.64625007}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1200334316
 GameObject:
   m_ObjectHideFlags: 0
@@ -179458,11 +179515,11 @@ PrefabInstance:
       objectReference: {fileID: 1958244763}
     - target: {fileID: 847691643668658723, guid: 0dde20dfd60efdd41a5fdde4efe4047b, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -13
+      value: -24
       objectReference: {fileID: 0}
     - target: {fileID: 847691643668658723, guid: 0dde20dfd60efdd41a5fdde4efe4047b, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 8
+      value: 4.8
       objectReference: {fileID: 0}
     - target: {fileID: 847691643668658723, guid: 0dde20dfd60efdd41a5fdde4efe4047b, type: 3}
       propertyPath: m_LocalPosition.z
@@ -179523,3 +179580,4 @@ SceneRoots:
   - {fileID: 97413192}
   - {fileID: 632568814}
   - {fileID: 7285668983115193721}
+  - {fileID: 1158046971}
