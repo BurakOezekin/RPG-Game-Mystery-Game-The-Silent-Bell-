@@ -29,7 +29,7 @@ public class MaxAIController : MonoBehaviour, Interactable
     [Header("Bell Quest")]
     [SerializeField] private GameObject bellObject; // Reference to the bell GameObject in the scene
     [SerializeField] private string secretCodeWord = "sturmglocke"; // Secret code from Tom
-    [SerializeField] private string[] riddleAnswers = new string[] { "glocke", "bell", "turm", "tower" }; // Acceptable answers
+    [SerializeField] private string[] riddleAnswers = new string[] { "turm", "tower" }; // Acceptable answers (prefer Turm)
     
     private bool isDialogOpen = false;
     private bool isWaitingForResponse = false;
@@ -131,11 +131,10 @@ public class MaxAIController : MonoBehaviour, Interactable
             if (lower.Contains("glocke") || lower.Contains("bell") || lower.Contains("wo"))
             {
                 // Player asks about bell -> Max gives riddle
-                string systemPrompt = "Du bist Max, Wächter der Burg im mittelalterlichen RPG 'Die stille Glocke'. " +
-                    "Der Spieler fragt nach der Glocke. Du kennst ein Rätsel! " +
-                    "Antworte auf Deutsch (2-3 Sätze): 'Die Glocke? Ich kenne ein Rätsel. Finde die Antwort und ich zeige dir die Glocke!' " +
-                    "Sei geheimnisvoll. Sage ihm dass er das Rätsel finden muss. " +
-                    "Frage des Spielers: ";
+                    string systemPrompt = "SYSTEM: Du bist Max, Wächter der Burg im mittelalterlichen RPG 'Die stille Glocke'. " +
+                        "Regeln: 1) Du kennst nur die Spielwelt. 2) Wenn der Spieler nach der Glocke fragt, gib KEINE Hinweise zur Lösung, sondern fordere ihn auf, nach dem Rätsel zu fragen. " +
+                        "Aufgabe: Antworte kurz (1-2 Sätze) auf Deutsch: 'Frag mich nach dem Rätsel, dann helfe ich dir weiter.' Bleibe geheimnisvoll. " +
+                        "Eingabe des Spielers: ";
                 
                 prompt = systemPrompt + prompt;
                 conversationStage = 1; // Move to riddle stage
@@ -157,11 +156,11 @@ public class MaxAIController : MonoBehaviour, Interactable
         {
             if (lower.Contains("rätsel") || lower.Contains("riddle") || lower.Contains("puzzle"))
             {
-                // Max gives a very simple riddle via Gemini
-                string systemPrompt = "SYSTEM: Du bist Max, Wächter der Burg im mittelalterlichen RPG 'Die stille Glocke'. " +
-                    "Regeln: 1) Du kennst nur die Spielwelt. 2) Gib ein SEHR EINFACHES Rätsel (1 Satz) auf Deutsch. 3) Die Antwort soll offensichtlich 'Glocke' oder 'Turm' sein. 4) Schließe mit: 'Was ist die Antwort?'. " +
-                    "Beispiel: 'Ich schweige jetzt, doch einst war mein Klang laut. Ich hänge hoch über dem Dorf. Was bin ich?' Was ist die Antwort? " +
-                    "Eingabe des Spielers: ";
+                // Max gives a very simple riddle via Gemini (answer must be 'Turm')
+                    string systemPrompt = "SYSTEM: Du bist Max, Wächter der Burg im mittelalterlichen RPG 'Die stille Glocke'. " +
+                        "Regeln: 1) Du kennst nur die Spielwelt. 2) Gib EIN SEHR EINFACHES Rätsel (GENAU 1 Satz) auf Deutsch. 3) Die EINZIGE richtige Lösung ist 'Turm'. 4) Das Rätsel darf NICHT die Wörter 'Turm', 'Glocke' oder 'Antwort' enthalten. 5) VARIERE die Formulierung zwischen Aufrufen. 6) Schliesse mit: 'Nenne die Lösung.' " +
+                        "Beispiel: 'Ich überrage das Dorf, aus Stein und Zeit, wo der Klang einst begann — wohin führt dein Weg? Nenne die Lösung.' " +
+                        "Eingabe des Spielers: ";
                 
                 prompt = systemPrompt + prompt;
                 conversationStage = 2;
@@ -197,12 +196,12 @@ public class MaxAIController : MonoBehaviour, Interactable
             
             if (correctAnswer)
             {
-                // CORRECT! Reveal the bell with dramatic story
+                // CORRECT! Answer is 'Turm' — instruct next step and reveal
                 string systemPrompt = "Du bist Max, der Wächter der Burg in einem RPG-Spiel. " +
-                    "Der Spieler hat dein Rätsel richtig gelöst! " +
-                    "Antworte auf Deutsch (2-3 Sätze): 'Ja, das ist richtig! Du hast es geschafft. Die Glocke wird sich nun offenbaren!' " +
-                    "Beschreibe kurz wie die Glocke erscheint. " +
-                    "Sei feierlich und begeistert! Antwort des Spielers war: ";
+                    "Der Spieler hat dein Rätsel richtig gelöst: 'Turm'. " +
+                    "Antworte auf Deutsch (2-3 Sätze): 'Ja, das ist richtig — der Turm! Bringe die Glocke dorthin und lass den Turm wieder ertönen.' " +
+                    "Beschreibe kurz, dass die Glocke erscheint und nun zum Turm gebracht werden soll. " +
+                    "Sei feierlich und klar! Antwort des Spielers war: ";
                 
                 prompt = systemPrompt + prompt;
                 bellRevealed = true;
@@ -211,10 +210,10 @@ public class MaxAIController : MonoBehaviour, Interactable
             }
             else
             {
-                // Wrong answer - give a simple hint via Gemini
+                // Wrong answer - give a simple hint via Gemini (point to 'Turm' without saying 'Glocke')
                 string systemPrompt = "SYSTEM: Du bist Max, Wächter der Burg. " +
-                    "Regeln: 1) Gib einen sehr einfachen Hinweis (1 Satz) auf Deutsch. 2) Verrate die Antwort nicht. 3) Deute auf 'hängt im Turm' oder 'läutet'. " +
-                    "Beispiel: 'Denke an etwas, das im Turm hängt und läutet.' " +
+                    "Regeln: 1) Gib einen sehr einfachen Hinweis (1 Satz) auf Deutsch. 2) Verrate die Antwort nicht. 3) Deute klar darauf, dass die Lösung ein Ort ist: der 'Turm'. 4) Nenne NICHT 'Glocke'. " +
+                    "Beispiel: 'Denke an das hohe Bauwerk aus Stein über dem Dorf — den Turm.' " +
                     "Eingabe des Spielers: ";
                 
                 prompt = systemPrompt + prompt;
