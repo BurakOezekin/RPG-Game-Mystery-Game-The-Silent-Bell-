@@ -10,9 +10,11 @@ public class TomAIController : MonoBehaviour, Interactable
 {
     [Header("Waypoints (set in inspector or use defaults)")]
     public Vector3[] waypoints = new Vector3[] {
-        new Vector3(-13f, 8f, 0f),
-        new Vector3(-3f, 8f, 0f),
-        new Vector3(-3f, 17f, 0f)
+        new Vector3(-24f, 4.8f, 0f),   // Startpunkt
+        new Vector3(-14f, 4.8f, 0f),   // 2. Punkt
+        new Vector3(-14f, 12f, 0f),    // 3. Punkt
+        new Vector3(-23f, 12.4f, 0f),  // 4. Punkt
+        new Vector3(-24f, 4.8f, 0f)    // zurück zum Startpunkt für Kreis
     };
 
     [Header("Movement")]
@@ -65,8 +67,14 @@ public class TomAIController : MonoBehaviour, Interactable
 
     void Start()
     {
-        if (waypoints == null || waypoints.Length == 0)
-            return;
+        // Erzwinge die gewünschten Wegpunkte unabhängig vom Inspector
+        waypoints = new Vector3[] {
+            new Vector3(-24f, 4.8f, 0f),   // Element 0
+            new Vector3(-15f, 4.8f, 0f),   // Element 1
+            new Vector3(-15f, 12f, 0f),    // Element 2
+            new Vector3(-24f, 12f, 0f),    // Element 3
+            new Vector3(-24f, 4.8f, 0f)    // Element 4 (zurück zum Start)
+        };
 
         transform.position = waypoints[0];
 
