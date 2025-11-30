@@ -36,7 +36,7 @@ setx GEMINI_API_KEY "key"
 ```bash
 curl "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent" \
   -H 'Content-Type: application/json' \
-  -H 'X-goog-api-key: AIzaSyBH10ztKrPAGAYKzHjVv1H_6H7Z7trpmGs' \
+  -H 'X-goog-api-key: here key' \
   -X POST \
   -d '{"contents":[{"parts":[{"text":"Explain how AI works in a few words"}]}]}'
 ```
