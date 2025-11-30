@@ -1,3 +1,7 @@
+# RPG-Spiel – Mystery Game „The Silent Bell“
+
+Kurze README mit Hinweisen zur lokalen Entwicklung und KI‑Integration.
+
 ## Spiellogik und Ablauf
 
 Das Spiel ist ein kleines Mystery-RPG mit folgenden zentralen Mechaniken und Ablauf:
@@ -91,74 +95,71 @@ Diese Sektion beschreibt die Spielwelt, wichtige Orte und wie die NPCs eingebund
 - Stelle sicher, dass die NPC-GameObjects in der Szene sind und die passenden Controller-Komponenten besitzen.
 - Für KI-NPCs (Bernd, Tom, Max): Gemini-API-Key wie oben beschrieben setzen (Umgebungsvariable bevorzugt).
 - Tom nutzt Wegpunkte; diese sind im `TomAIController` hinterlegt und können im Inspector überschrieben werden.
-# RPG-Game - Mystery Game "The Silent Bell"
 
-Short README with local development notes for AI integration.
+## Überblick
+Dieses Unity-Projekt ist ein kleines RPG-/Mystery-Spiel. Die Komponente `MaxAIController` (Assets/Scripts/MaxAIController.cs) implementiert einen In‑Game‑Chat, der Prompts an ein LLM sendet und Antworten seitenweise im Spiel anzeigt.
 
-## Overview
-This Unity project is a small RPG/mystery game. The `MaxAIController` component (Assets/Scripts/MaxAIController.cs) implements an in-game chat dialog that can send prompts to an LLM backend and display paginated responses in-game.
+## KI-Integration
+Dieses Projekt nutzt die Google Generative (Gemini) REST API für KI-Antworten im Spiel.
 
-## AI Integration
-This project now uses the Google Generative (Gemini) REST API for in-game AI responses.
+- Endpoint: `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent` (konfigurierbar)
+  - Standardmodell im Code: `gemini-2.0-flash`
 
-- Endpoint: `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent` (configurable)
-  - Default model used in code: `gemini-2.0-flash`
+`MaxAIController` liest den API‑Key aus dem Inspector-Feld `geminiApiKey` und – falls leer – standardmäßig aus der Umgebungsvariablen `GEMINI_API_KEY`.
 
-`MaxAIController` reads an API key from the Inspector field `geminiApiKey` and — if empty — falls back to the environment variable `GEMINI_API_KEY` by default.
-
-### How to use Gemini (Google Generative API)
-1. Set the environment variable in PowerShell for the current session (works if you start Unity from the same shell):
+### Gemini (Google Generative API) verwenden
+1. Umgebungsvariable in PowerShell für die aktuelle Sitzung setzen (funktioniert, wenn du Unity aus derselben Shell startest):
 
 ```powershell
 $env:GEMINI_API_KEY="key"
 ```
 
-2. Or persist the variable (Windows) so it is available after restarting Unity (requires restarting Unity):
+2. Oder dauerhaft (Windows) setzen, sodass sie nach einem Neustart von Unity verfügbar ist (Unity danach neu starten):
 
 ```powershell
 setx GEMINI_API_KEY "key"
 ```
 
-3. In the Unity Editor:
-- Select the GameObject with the `MaxAIController` component.
-- Ensure `Gemini Env Var Name` is `GEMINI_API_KEY` (or change if you prefer another name).
-- Either leave `Gemini Api Key` blank (env var used) or paste the key into that field for quick testing.
+3. Im Unity-Editor:
+- Wähle das GameObject mit der Komponente `MaxAIController`.
+- Stelle sicher, dass `Gemini Env Var Name` auf `GEMINI_API_KEY` steht (oder passe den Namen an).
+- Lasse `Gemini Api Key` leer (Umgebungsvariable wird genutzt) oder trage für schnelles Testen den Key vorübergehend ein.
 
-4. Example curl request (from project owner):
+4. Beispiel-curl-Aufruf:
 
 ```bash
 curl "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent" \
   -H 'Content-Type: application/json' \
-  -H 'X-goog-api-key: here key' \
+  -H 'X-goog-api-key: key' \
   -X POST \
-  -d '{"contents":[{"parts":[{"text":"Explain how AI works in a few words"}]}]}'
+  -d '{"contents":[{"parts":[{"text":"Erkläre in wenigen Worten, wie KI funktioniert"}]}]}'
 ```
 
-5. Play the scene and interact with Max to send prompts.
+5. Spiele die Szene und interagiere mit Max, um Prompts zu senden.
 
-### Inspector fields in `MaxAIController`
-- `Gemini Api Key` (string): Optional; if set, used instead of environment variable.
-- `Gemini Env Var Name` (string): Name of env var to read the key from (default: `GEMINI_API_KEY`).
-- `Gemini Model` (string): The model name to send to the Generative API (default: `gemini-2.0-flash`).
-- `Gemini Url` (string): Full endpoint to call for generateContent (default: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`).
+### Inspector-Felder in `MaxAIController`
+- `Gemini Api Key` (string): Optional; wenn gesetzt, wird er statt der Umgebungsvariable verwendet.
+- `Gemini Env Var Name` (string): Name der Umgebungsvariablen (Standard: `GEMINI_API_KEY`).
+- `Gemini Model` (string): Modellname für die Generative API (Standard: `gemini-2.0-flash`).
+- `Gemini Url` (string): Vollständiger Endpunkt für generateContent (Standard: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`).
 
-## Security & best practices
-- Never commit API keys or secrets into the repository. Use environment variables, CI secret stores, or Editor-only ignored files.
-- The repository currently supports reading an OpenRouter API key from an environment variable; prefer this for local development and CI.
-- If you temporarily paste a key into the Inspector for testing, make sure that you do not save the value into any committed Prefab/Scene that will store the secret.
+## Sicherheit & Best Practices
+- Keine API-Keys oder Secrets ins Repository committen. Nutze Umgebungsvariablen, CI-Secret-Stores oder Editor‑only ignorierte Dateien.
+- Das Repository unterstützt das Lesen eines OpenRouter-API-Keys aus einer Umgebungsvariablen; bevorzuge dies für lokale Entwicklung und CI.
+- Wenn du testweise einen Key in den Inspector einfügst, speichere ihn nicht dauerhaft in Prefabs/Szenen, die committed werden.
 
-Important Google/Gemini notes:
-- Ensure the Generative API is enabled for your Google Cloud project and that billing is active — otherwise requests will return HTTP 403 Forbidden.
-- Check API key restrictions in the Google Cloud Console: if the API key is restricted by HTTP referrers or IP addresses it can cause 403 errors from Unity. For local testing, use a key without restrictive referrers or add appropriate restrictions (IP/HTTP) that include your client.
-- If you see `403 Forbidden` responses, check the response body in Unity Console (it often contains a diagnostic message) and verify the key/project configuration in https://console.cloud.google.com/
+Wichtige Google/Gemini-Hinweise:
+- Stelle sicher, dass die Generative API in deinem Google-Cloud-Projekt aktiviert ist und Abrechnung aktiv ist – sonst gibt es HTTP 403 Forbidden.
+- Prüfe Key-Einschränkungen in der Google Cloud Console: Starke Einschränkungen (Referrer/IP) können 403-Fehler in Unity auslösen. Für lokale Tests entweder ohne restriktive Referrer oder passende Ausnahmen konfigurieren.
+- Bei `403 Forbidden`: Antworttext in der Unity-Konsole prüfen (oft mit Diagnose) und Projekt/Key-Konfiguration in https://console.cloud.google.com/ verifizieren.
 
-## Troubleshooting
-- If you see a Unity Console warning that the API key is missing, confirm the Inspector field or that the environment variable is set and Unity was restarted (for `setx` changes).
-- If using Ollama locally, confirm the Ollama process is running and reachable at the configured `Ollama Url`.
+## Fehlerbehebung
+- Erscheint in Unity eine Warnung, dass der API‑Key fehlt, prüfe den Inspector oder die Umgebungsvariable und starte Unity ggf. neu (für `setx`).
+- Wenn du lokal Ollama nutzt, stelle sicher, dass der Ollama‑Prozess läuft und unter der konfigurierten `Ollama Url` erreichbar ist.
 
-## Next steps (optional)
-- Add an Editor-only secret store (ignored file) or use `System.Environment.GetEnvironmentVariable` from a secure CI context.
-- Add unit tests / integration tests for request/response parsing (currently the code uses Unity's `JsonUtility` for a typical OpenRouter/OpenAI response and a fallback parser for Ollama streaming format).
+## Nächste Schritte (optional)
+- Editor‑only Secret-Store (ignorierte Datei) ergänzen oder `System.Environment.GetEnvironmentVariable` aus sicherem CI-Kontext verwenden.
+- Unit-/Integrationstests für Request-/Response‑Parsing ergänzen (der Code nutzt Unitys `JsonUtility` für typische OpenRouter/OpenAI‑Antworten und einen Fallback‑Parser für Ollama‑Streaming).
 
 ---
-If you want, I can also add a small `CONTRIBUTING.md` snippet that describes how to add keys to your development environment safely, or implement Editor-only secure storage for the key. Please tell me which you prefer.
+Wenn du möchtest, kann ich eine kurze `CONTRIBUTING.md` ergänzen, die erklärt, wie Keys sicher für die Entwicklung gesetzt werden, oder eine Editor‑only‑Lösung zur sicheren Speicherung implementieren.
