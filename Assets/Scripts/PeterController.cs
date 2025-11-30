@@ -4,9 +4,19 @@ using UnityEngine;
 
 public class PeterController : MonoBehaviour, Interactable
 {
-     [SerializeField] Dialog dialog;
-   public void Interact()
+    [SerializeField] Dialog dialog;
+    
+    private bool hasSpoken = false;
+
+    public void Interact()
     {
-         StartCoroutine(DialogManager.Instance.ShowDialog(dialog));
+        // Mark quest as started
+        if (!hasSpoken && QuestManager.Instance != null)
+        {
+            QuestManager.Instance.MarkPeterTalked();
+            hasSpoken = true;
+        }
+        
+        StartCoroutine(DialogManager.Instance.ShowDialog(dialog));
     }
 }

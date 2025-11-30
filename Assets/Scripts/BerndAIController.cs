@@ -34,6 +34,12 @@ public class BerndAIController : MonoBehaviour, Interactable
     {
         if (!isDialogOpen)
         {
+            // Mark Bernd as talked to
+            if (QuestManager.Instance != null)
+            {
+                QuestManager.Instance.MarkBerndTalked();
+            }
+            
             dialogBox.SetActive(true);
             dialogText.text = "Hallo, ich bin Bernd! Frag mich etwas:";
             inputField.text = "";
@@ -89,89 +95,30 @@ public class BerndAIController : MonoBehaviour, Interactable
         isWaitingForResponse = true;
         inputField.gameObject.SetActive(false);
         dialogText.text = "Bernd denkt nach...";
-        bool promptStyled = false;
 
-        // Special-case: if the player asks about the "Glocke", return randomized hints locally or via Gemini
-        if (!string.IsNullOrEmpty(prompt))
+        // Check if asking about the bell/Glocke - give FALSE hint to the west/fountain
+        string lower = prompt.ToLower();
+        if (lower.Contains("glocke") || lower.Contains("bell") || lower.Contains("wo"))
         {
-            string lower = prompt.ToLower();
-            if (lower.Contains("glocke") || lower.Contains("glocke?"))
-            {
-                // Local hint variations
-                string[] bellLocal = new string[] {
-                    "Lauf den Flur entlang — vielleicht siehst du etwas.",
-                    "Schau im Glockenturm nach, dort könnte sie verborgen sein.",
-                    "Versuch den Innenhof; ich habe dort vor Kurzem etwas gehört.",
-                    "Geh nach Norden und halte Ausschau nach einer großen Tür.",
-                    "Vielleicht findest du Hinweise in der Kapelle.",
-                    "Auf dem Weg dorthin siehst du vielleicht eine offene Luke.",
-                    "Folge den Glockenschlägen, sie führen dich näher.",
-                    "Sie wurde zuletzt in der Nähe des alten Zauns gesehen.",
-                    "Man sagt, etwas funkelt bei Mondschein am Tor zum Kirchhof.",
-                    "Schau hinter dem Altar — dort verstecken sich manchmal Dinge."
-                };
-
-                string[] bellPrefixes = new string[] {
-                    "Auf dem Weg: ",
-                    "Vielleicht: ",
-                    "Tipp: ",
-                    "Kleiner Hinweis: ",
-                    "Pssst — denk daran: "
-                };
-
-                float roll = UnityEngine.Random.value;
-                // 70% chance to use a local, canned hint; 30% to ask Gemini to craft a varied hint
-                if (roll < 0.7f)
-                {
-                    int idx = UnityEngine.Random.Range(0, bellLocal.Length);
-                    int p = UnityEngine.Random.Range(0, bellPrefixes.Length);
-                    string berndResponse = bellPrefixes[p] + bellLocal[idx];
-
-                    // Create dialog pages and show first page
-                    dialog = new Dialog();
-                    berndResponse = UnescapeCommonSequences(berndResponse);
-                    var lines = SplitTextIntoPages(berndResponse, 25);
-                    typeof(Dialog).GetField("lines", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                        .SetValue(dialog, lines);
-                    currentLine = 0;
-                    dialogText.text = lines[0];
-                    isWaitingForResponse = false;
-                    yield break;
-                }
-                else
-                {
-                    // Ask Gemini for a varied hint style; append an instruction to be brief and slightly vague
-                    string[] geminiStyles = new string[] {
-                        "Antworte kurz und rätselhaft auf Deutsch: ",
-                        "Gib einen freundlichen, vagen Hinweis auf Deutsch: ",
-                        "Sei als NPC kurz und hilfreich, antworte auf Deutsch: ",
-                        "Formuliere einen kurzen Tipp auf Deutsch, ohne genaue Orte zu verraten: "
-                    };
-                    string style = geminiStyles[UnityEngine.Random.Range(0, geminiStyles.Length)];
-                    prompt = style + "Wo könnte die Glocke in diesem Gebiet versteckt sein?";
-                    promptStyled = true;
-                    // continue to the Gemini request path below using modified prompt
-                }
-            }
+            // Create system prompt for Gemini to give FALSE hint
+            string systemPrompt = "Du bist Bernd, ein NPC in einem RPG-Spiel. Der Spieler sucht die Glocke. " +
+                "Du sollst ihm einen FALSCHEN Hinweis geben, dass die Glocke im Westen am Brunnen ist. " +
+                "Antworte kurz und überzeugend auf Deutsch, als würdest du wirklich helfen. " +
+                "Sage etwas wie 'Ich habe gehört, die Glocke könnte im Westen beim Brunnen sein' oder ähnlich. " +
+                "Maximal 2-3 Sätze. Frage des Spielers: ";
+            
+            prompt = systemPrompt + prompt;
         }
-
-        // (the bell branch above may have already modified `prompt` and set `promptStyled`)
-        // If not already styled, choose a random style for the Gemini prompt to vary responses
-        if (!promptStyled)
+        else
         {
-            string[] generalStyles = new string[] {
-                "Antworte kurz, freundlich und hilfreich auf Deutsch: ",
-                "Gib eine kurze, rätselhafte Antwort auf Deutsch: ",
-                "Sei locker und knapp, antworte auf Deutsch: ",
-                "Formuliere einen prägnanten Tipp auf Deutsch: ",
-                "Antwort als NPC Bernd, kurz und höflich, auf Deutsch: "
-            };
-            // small chance to not style (pure question)
-            if (UnityEngine.Random.value < 0.85f)
-            {
-                string chosen = generalStyles[UnityEngine.Random.Range(0, generalStyles.Length)];
-                prompt = chosen + prompt;
-            }
+            // For other questions, make Bernd say he doesn't know
+            string systemPrompt = "Du bist Bernd, ein NPC in einem RPG-Spiel. " +
+                "Du weißt nur etwas über die Glocke (die angeblich im Westen am Brunnen sein soll). " +
+                "Für alle anderen Fragen antworte kurz auf Deutsch mit 'Das weiß ich leider nicht' oder " +
+                "'Tut mir leid, darüber kann ich dir nichts sagen' oder ähnlich. " +
+                "Maximal 1-2 Sätze. Frage des Spielers: ";
+            
+            prompt = systemPrompt + prompt;
         }
 
         // Build Gemini (Google Generative) request body

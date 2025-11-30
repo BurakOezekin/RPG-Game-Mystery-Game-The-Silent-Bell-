@@ -20,6 +20,12 @@ public class TomAIController : MonoBehaviour, Interactable
     public float waitTime = 1.0f;
     public bool startOnAwake = true;
 
+    [Header("Flee Behavior")]
+    public float fleeDistance = 3f;
+    public float fleeSpeed = 4f;
+    public Transform playerTransform;
+    private bool isFleeing = false;
+
     private int index = 0;
     private int direction = 1; // 1 = forward through array, -1 = backward
     private Coroutine routine;
@@ -47,6 +53,14 @@ public class TomAIController : MonoBehaviour, Interactable
     {
         animator = GetComponent<Animator>() ?? GetComponentInChildren<Animator>();
         rb2d = GetComponent<Rigidbody2D>();
+        
+        // Try to find player if not assigned
+        if (playerTransform == null)
+        {
+            GameObject player = GameObject.FindGameObjectWithTag("Player");
+            if (player != null)
+                playerTransform = player.transform;
+        }
     }
 
     void Start()
@@ -58,6 +72,54 @@ public class TomAIController : MonoBehaviour, Interactable
 
         if (startOnAwake)
             routine = StartCoroutine(FollowPath());
+    }
+
+    void Update()
+    {
+        // Check distance to player and flee if too close (unless dialog is open)
+        if (!isDialogOpen && playerTransform != null && !isFleeing)
+        {
+            float distance = Vector2.Distance(transform.position, playerTransform.position);
+            if (distance < fleeDistance)
+            {
+                StartCoroutine(FleeFromPlayer());
+            }
+        }
+        
+        // Dialog controls (ENTER, L, ESC)
+        HandleDialogInput();
+    }
+
+    IEnumerator FleeFromPlayer()
+    {
+        isFleeing = true;
+        StopPatrol();
+
+        float fleeDuration = 2f;
+        float elapsed = 0f;
+
+        while (elapsed < fleeDuration && playerTransform != null)
+        {
+            Vector2 fleeDirection = ((Vector2)transform.position - (Vector2)playerTransform.position).normalized;
+            Vector2 targetPos = (Vector2)transform.position + fleeDirection * fleeSpeed * Time.deltaTime;
+
+            if (rb2d != null)
+                rb2d.MovePosition(targetPos);
+            else
+                transform.position = targetPos;
+
+            UpdateAnimatorMovement(new Vector3(fleeDirection.x, fleeDirection.y, 0f));
+
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        UpdateAnimatorMovement(Vector3.zero);
+        isFleeing = false;
+        
+        // Resume patrol after fleeing
+        yield return new WaitForSeconds(1f);
+        StartPatrol();
     }
 
     IEnumerator FollowPath()
@@ -150,13 +212,20 @@ public class TomAIController : MonoBehaviour, Interactable
     {
         if (!isDialogOpen)
         {
-            // pause patrol and player
+            // Mark Tom as talked to
+            if (QuestManager.Instance != null)
+            {
+                QuestManager.Instance.MarkTomTalked();
+            }
+            
+            // Stop fleeing and patrol
+            isFleeing = false;
             StopPatrol();
 
             if (dialogBox != null)
             {
                 dialogBox.SetActive(true);
-                if (dialogText != null) dialogText.text = "Hallo, ich bin Tom! Frag mich etwas:";
+                if (dialogText != null) dialogText.text = "Hallo, ich bin Tom! Stell mir ein Rätsel oder frag mich etwas:";
                 if (inputField != null)
                 {
                     inputField.text = "";
@@ -170,7 +239,7 @@ public class TomAIController : MonoBehaviour, Interactable
         }
     }
 
-    void Update()
+    void HandleDialogInput()
     {
         // ENTER → Anfrage senden
         if (isDialogOpen && Input.GetKeyDown(KeyCode.Return) && !isWaitingForResponse)
@@ -216,6 +285,38 @@ public class TomAIController : MonoBehaviour, Interactable
         isWaitingForResponse = true;
         if (inputField != null) inputField.gameObject.SetActive(false);
         if (dialogText != null) dialogText.text = "Tom denkt nach...";
+
+        // Frame replies via a system prompt (Tom only knows the game world)
+        string lower = prompt.ToLower();
+        if (lower.Contains("glocke") || lower.Contains("bell") || lower.Contains("wo") || lower.Contains("hilfe") || lower.Contains("help"))
+        {
+            // Tom redirects to Max with a clear system prompt
+            string systemPrompt = "SYSTEM: Du bist Tom, ein Dorfbewohner im mittelalterlichen RPG 'Die stille Glocke'. " +
+                "Regeln: 1) Du kennst nur Dinge aus dieser Welt (Dorf, Burg, Glocke, Max). 2) Bei modernen Themen (Auto, Computer) antworte: 'Davon habe ich noch nie gehört!'. 3) Wenn der Spieler nach der Glocke fragt, leite ihn zu Max an. " +
+                "Aufgabe: Antworte kurz (1-2 Sätze) auf Deutsch und drücke sinngemäß aus: 'Geh zur Burg und sprich mit Max dem Wächter. Er kennt ein Rätsel, das dich zur Glocke führt!'. Verwende SYNONYME oder eine PARAPHRASE, nicht exakt denselben Satz. " +
+                "Eingabe des Spielers: ";
+            
+            prompt = systemPrompt + prompt;
+        }
+        else if (lower.Contains("rätsel") || lower.Contains("riddle") || lower.Contains("puzzle") || lower.Contains("antwort") || lower.Contains("answer"))
+        {
+            // Tom keeps redirecting to Max; still via system prompt
+            string systemPrompt = "SYSTEM: Du bist Tom aus dem mittelalterlichen Dorf 'Die stille Glocke'. " +
+                "Regeln: 1) Du kennst nur die Spielwelt. 2) Antworte knapp. 3) Wenn nach Rätsel/Antwort gefragt wird, verweise auf Max. " +
+                "Aufgabe: Antworte (1 Satz) auf Deutsch: 'Das Rätsel kennt nur Max bei der Burg. Frage ihn!'. " +
+                "Eingabe des Spielers: ";
+            
+            prompt = systemPrompt + prompt;
+        }
+        else
+        {
+            // General system prompt for Tom
+            string systemPrompt = "SYSTEM: Du bist Tom, ein Dorfbewohner im mittelalterlichen RPG 'Die stille Glocke'. " +
+                "Regeln: Du kennst nur die Spielwelt (Dorf, Burg, Glocke, Max, Peter). Bei modernen Dingen antworte: 'Davon habe ich noch nie gehört!'. Antworte immer kurz (1-2 Sätze) auf Deutsch und bleibe im Charakter. " +
+                "Eingabe des Spielers: ";
+            
+            prompt = systemPrompt + prompt;
+        }
 
         string body = "{\"contents\":[{\"parts\":[{\"text\":\"" + prompt.Replace("\"", "\\\"") + "\"}]}]}";
 

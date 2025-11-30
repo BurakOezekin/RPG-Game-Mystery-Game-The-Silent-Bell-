@@ -26,16 +26,49 @@ public class MaxAIController : MonoBehaviour, Interactable
     [Tooltip("Name of the environment variable to read the Gemini API key from (used when `geminiApiKey` is empty).")]
     [SerializeField] private string geminiEnvVarName = "GEMINI_API_KEY";
 
+    [Header("Bell Quest")]
+    [SerializeField] private GameObject bellObject; // Reference to the bell GameObject in the scene
+    [SerializeField] private string secretCodeWord = "sturmglocke"; // Secret code from Tom
+    [SerializeField] private string[] riddleAnswers = new string[] { "glocke", "bell", "turm", "tower" }; // Acceptable answers
+    
     private bool isDialogOpen = false;
     private bool isWaitingForResponse = false;
     private int currentLine = 0;
+    private bool bellRevealed = false;
+    private bool riddleAsked = false;
+    private bool codeWordGiven = false;
+    private int conversationStage = 0; // 0=need code, 1=code given, 2=riddle asked, 3=bell revealed
 
     public void Interact()
     {
         if (!isDialogOpen)
         {
+            // Mark Max as talked to
+            if (QuestManager.Instance != null)
+            {
+                QuestManager.Instance.MarkMaxTalked();
+            }
+            
             dialogBox.SetActive(true);
-            dialogText.text = "Hallo, ich bin Max! Frag mich etwas:";
+            
+            // Different greeting based on conversation stage
+            if (conversationStage == 0)
+            {
+                dialogText.text = "Ich bin Max, Wächter der Burg. Kennst du das Codewort?";
+            }
+            else if (conversationStage == 1)
+            {
+                dialogText.text = "Das Codewort ist korrekt. Frage mich nach der Glocke.";
+            }
+            else if (conversationStage == 2 && !bellRevealed)
+            {
+                dialogText.text = "Hast du die Antwort auf mein Rätsel?";
+            }
+            else if (bellRevealed)
+            {
+                dialogText.text = "Die Glocke wurde enthüllt. Nimm sie!";
+            }
+            
             inputField.text = "";
             inputField.gameObject.SetActive(true);
             inputField.ActivateInputField();
@@ -90,6 +123,115 @@ public class MaxAIController : MonoBehaviour, Interactable
         inputField.gameObject.SetActive(false);
         dialogText.text = "Max denkt nach...";
 
+        string lower = prompt.ToLower().Trim();
+        
+        // Stage 0: First conversation - player asks about bell
+        if (conversationStage == 0)
+        {
+            if (lower.Contains("glocke") || lower.Contains("bell") || lower.Contains("wo"))
+            {
+                // Player asks about bell -> Max gives riddle
+                string systemPrompt = "Du bist Max, Wächter der Burg im mittelalterlichen RPG 'Die stille Glocke'. " +
+                    "Der Spieler fragt nach der Glocke. Du kennst ein Rätsel! " +
+                    "Antworte auf Deutsch (2-3 Sätze): 'Die Glocke? Ich kenne ein Rätsel. Finde die Antwort und ich zeige dir die Glocke!' " +
+                    "Sei geheimnisvoll. Sage ihm dass er das Rätsel finden muss. " +
+                    "Frage des Spielers: ";
+                
+                prompt = systemPrompt + prompt;
+                conversationStage = 1; // Move to riddle stage
+            }
+            else
+            {
+                // Other questions - only knows game world
+                string systemPrompt = "Du bist Max, Wächter der Burg im mittelalterlichen RPG 'Die stille Glocke'. " +
+                    "Du weißt NUR über diese Spielwelt: das Dorf, die Burg, die Glocke, die Wächter. " +
+                    "Für Fragen über moderne Dinge (Auto, Computer, Internet, etc.) antworte: 'Davon habe ich noch nie gehört!' " +
+                    "Für Spielwelt-Fragen antworte passend und kurz auf Deutsch (1-2 Sätze). " +
+                    "Frage des Spielers: ";
+                
+                prompt = systemPrompt + prompt;
+            }
+        }
+        // Stage 1: Player asks for riddle
+        else if (conversationStage == 1)
+        {
+            if (lower.Contains("rätsel") || lower.Contains("riddle") || lower.Contains("puzzle"))
+            {
+                // Max gives a very simple riddle via Gemini
+                string systemPrompt = "SYSTEM: Du bist Max, Wächter der Burg im mittelalterlichen RPG 'Die stille Glocke'. " +
+                    "Regeln: 1) Du kennst nur die Spielwelt. 2) Gib ein SEHR EINFACHES Rätsel (1 Satz) auf Deutsch. 3) Die Antwort soll offensichtlich 'Glocke' oder 'Turm' sein. 4) Schließe mit: 'Was ist die Antwort?'. " +
+                    "Beispiel: 'Ich schweige jetzt, doch einst war mein Klang laut. Ich hänge hoch über dem Dorf. Was bin ich?' Was ist die Antwort? " +
+                    "Eingabe des Spielers: ";
+                
+                prompt = systemPrompt + prompt;
+                conversationStage = 2;
+                riddleAsked = true;
+            }
+            else
+            {
+                // Remind player to ask for riddle
+                string systemPrompt = "Du bist Max, Wächter der Burg im mittelalterlichen RPG 'Die stille Glocke'. " +
+                    "Der Spieler hat noch nicht nach dem Rätsel gefragt. " +
+                    "Antworte auf Deutsch (1 Satz): 'Frage mich nach dem Rätsel wenn du bereit bist!' " +
+                    "Oder für andere Spielwelt-Fragen antworte kurz. " +
+                    "Für moderne Dinge sage: 'Davon habe ich noch nie gehört!' " +
+                    "Frage des Spielers: ";
+                
+                prompt = systemPrompt + prompt;
+            }
+        }
+        // Stage 2: Riddle asked - check answer
+        else if (conversationStage == 2 && !bellRevealed)
+        {
+            // Check if player gave correct riddle answer (simple, trimmed)
+            bool correctAnswer = false;
+            string trimmed = lower.Replace(".", "").Replace("!", "").Replace("?", "").Trim();
+            foreach (string answer in riddleAnswers)
+            {
+                if (trimmed == answer || trimmed.Contains(answer))
+                {
+                    correctAnswer = true;
+                    break;
+                }
+            }
+            
+            if (correctAnswer)
+            {
+                // CORRECT! Reveal the bell with dramatic story
+                string systemPrompt = "Du bist Max, der Wächter der Burg in einem RPG-Spiel. " +
+                    "Der Spieler hat dein Rätsel richtig gelöst! " +
+                    "Antworte auf Deutsch (2-3 Sätze): 'Ja, das ist richtig! Du hast es geschafft. Die Glocke wird sich nun offenbaren!' " +
+                    "Beschreibe kurz wie die Glocke erscheint. " +
+                    "Sei feierlich und begeistert! Antwort des Spielers war: ";
+                
+                prompt = systemPrompt + prompt;
+                bellRevealed = true;
+                conversationStage = 3;
+                StartCoroutine(RevealBellAfterDelay(3f));
+            }
+            else
+            {
+                // Wrong answer - give a simple hint via Gemini
+                string systemPrompt = "SYSTEM: Du bist Max, Wächter der Burg. " +
+                    "Regeln: 1) Gib einen sehr einfachen Hinweis (1 Satz) auf Deutsch. 2) Verrate die Antwort nicht. 3) Deute auf 'hängt im Turm' oder 'läutet'. " +
+                    "Beispiel: 'Denke an etwas, das im Turm hängt und läutet.' " +
+                    "Eingabe des Spielers: ";
+                
+                prompt = systemPrompt + prompt;
+            }
+        }
+        // Stage 3: Bell revealed - final conversations
+        else if (conversationStage == 3)
+        {
+            string systemPrompt = "Du bist Max, der Wächter der Burg in einem RPG-Spiel. " +
+                "Der Spieler hat das Rätsel gelöst und die Glocke wurde enthüllt! " +
+                "Du weißt NUR über diese Spielwelt: das Dorf, die Burg, die Glocke, die Wächter. " +
+                "Für Fragen über moderne Dinge (Auto, Computer, Internet, etc.) antworte: 'Davon habe ich noch nie gehört!' " +
+                "Für Spielwelt-Fragen antworte freundlich auf Deutsch (1-2 Sätze). " +
+                "Frage des Spielers: ";
+            
+            prompt = systemPrompt + prompt;
+        }
 
         // Build Gemini (Google Generative) request body
         string body = "{\"contents\":[{\"parts\":[{\"text\":\"" + prompt.Replace("\"", "\\\"") + "\"}]}]}";
@@ -318,9 +460,53 @@ public class MaxAIController : MonoBehaviour, Interactable
 
             currentLine = 0;
             dialogText.text = lines[0];
+            
+            // Reveal the bell if this was a bell-related question
+            if (bellRevealed)
+            {
+                RevealBell();
+            }
         }
 
         isWaitingForResponse = false;
+    }
+
+    private void RevealBell()
+    {
+        if (bellObject != null)
+        {
+            // First, activate the GameObject if it was deactivated
+            if (!bellObject.activeSelf)
+            {
+                bellObject.SetActive(true);
+                Debug.Log("🔓 Bell GameObject activated!");
+            }
+            
+            // Then trigger the reveal on the BellItem component
+            BellItem bellItem = bellObject.GetComponent<BellItem>();
+            if (bellItem != null)
+            {
+                bellItem.Reveal();
+            }
+            
+            Debug.Log("🔔 Die Glocke wurde enthüllt!");
+            
+            // Mark in quest manager
+            if (QuestManager.Instance != null)
+            {
+                QuestManager.Instance.RevealBell();
+            }
+        }
+        else
+        {
+            Debug.LogWarning("⚠️ Bell object reference is not set in MaxAIController!");
+        }
+    }
+
+    IEnumerator RevealBellAfterDelay(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        RevealBell();
     }
 
     // Parse Gemini/Generative API response (best-effort). We look for common fields like "text" or "content".
