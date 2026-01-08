@@ -65,15 +65,15 @@ Diese Quest führt den Spieler durch die Stadt, um die verschwundene Glocke zu f
    - **Dialog:** (Optional - wird dynamisch erstellt)
 
 2. **API Configuration:**
-   - **Gemini Api Key:** (Leer lassen - verwende Secrets Datei!)
-   - **Gemini Model:** `gemini-2.0-flash`
-   - **Gemini Url:** `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`
-   - **Gemini Env Var Name:** `GEMINI_API_KEY`
+   - **OpenRouter Api Key:** (Leer lassen - verwende Secrets Datei!)
+   - **OpenRouter Model:** `google/gemma-3n-e2b-it:free`
+   - **OpenRouter Url:** `https://openrouter.ai/api/v1/chat/completions`
+   - **OpenRouter Env Var Name:** `OPENROUTER_API_KEY`
 
-3. **Gemini API Key Setup (WICHTIG!):**
+3. **OpenRouter API Key Setup (WICHTIG!):**
    - Erstelle Ordner im Projekt-Root: `Secrets/`
-   - Erstelle Datei: `Secrets/gemini_key.txt`
-   - Füge deinen Gemini API Key ein
+   - Erstelle Datei: `Secrets/openrouter_key.txt`
+   - Füge deinen OpenRouter API Key ein
    - Diese Datei wird NICHT in Git committed!
 
 #### Funktionsweise:
@@ -184,7 +184,7 @@ Diese Quest führt den Spieler durch die Stadt, um die verschwundene Glocke zu f
 3. **Dialog Box Children:**
    ```
    DialogBox (Panel)
-   ├── DialogText (Text) - Zeigt Gemini Antworten
+   ├── DialogText (Text) - Zeigt AI Antworten
    └── InputField (InputField) - Spieler tippt Fragen
    ```
 
@@ -195,11 +195,11 @@ Diese Quest führt den Spieler durch die Stadt, um die verschwundene Glocke zu f
 
 ---
 
-## Gemini API Key Setup (Sicherheit!)
+## OpenRouter API Key Setup (Sicherheit!)
 
 ### Option 1: Secrets Datei (EMPFOHLEN für Editor)
-1. Erstelle im Projekt-Root: `Secrets/gemini_key.txt`
-2. Füge deinen API Key ein
+1. Erstelle im Projekt-Root: `Secrets/openrouter_key.txt`
+2. Füge deinen OpenRouter API Key ein (z.B. aus dem kostenlosen Modell `google/gemini-2.0-flash-exp:free`)
 3. Füge zu `.gitignore` hinzu:
    ```
    Secrets/
@@ -207,8 +207,8 @@ Diese Quest führt den Spieler durch die Stadt, um die verschwundene Glocke zu f
 
 ### Option 2: Environment Variable (Production)
 1. Setze System-Umgebungsvariable:
-   - Windows: `setx GEMINI_API_KEY "dein-api-key"`
-   - Mac/Linux: `export GEMINI_API_KEY="dein-api-key"`
+   - Windows: `setx OPENROUTER_API_KEY "dein-api-key"`
+   - Mac/Linux: `export OPENROUTER_API_KEY="dein-api-key"`
 
 ### Option 3: Inspector (NICHT EMPFOHLEN)
 - Nur für Tests! Niemals in Version Control committen!

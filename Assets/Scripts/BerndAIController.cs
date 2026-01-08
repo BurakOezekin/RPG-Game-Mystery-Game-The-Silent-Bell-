@@ -14,21 +14,31 @@ public class BerndAIController : MonoBehaviour, Interactable
     [SerializeField] Dialog dialog;
 
     [Header("API Configuration")]
-    [Tooltip("Gemini API key. Prefer using the local Secrets/gemini_key.txt (Editor) or env var for production.")]
+    [Tooltip("OpenRouter API key (Gemini). Prefer Secrets/openrouter_key.txt in Editor or env var in builds.")]
     [SerializeField] private string geminiApiKey = "";
 
-    [Tooltip("Gemini model name (e.g. gemini-2.0-flash)")]
-    [SerializeField] private string geminiModel = "gemini-2.0-flash";
+    [Tooltip("OpenRouter model name (e.g. google/gemma-3n-e2b-it:free)")]
+    [SerializeField] private string geminiModel = "google/gemma-3n-e2b-it:free";
 
-    [Tooltip("Gemini endpoint (default: https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent)")]
-    [SerializeField] private string geminiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+    [Tooltip("OpenRouter endpoint (default: https://openrouter.ai/api/v1/chat/completions)")]
+    [SerializeField] private string geminiUrl = "https://openrouter.ai/api/v1/chat/completions";
 
-    [Tooltip("Name of the environment variable to read the Gemini API key from (used when `geminiApiKey` is empty).")]
-    [SerializeField] private string geminiEnvVarName = "GEMINI_API_KEY";
+    [Tooltip("Environment variable used when `geminiApiKey` is empty.")]
+    [SerializeField] private string geminiEnvVarName = "OPENROUTER_API_KEY";
 
     private bool isDialogOpen = false;
     private bool isWaitingForResponse = false;
     private int currentLine = 0;
+
+    private void OnValidate()
+    {
+        if (string.IsNullOrEmpty(geminiUrl) || geminiUrl.Contains("generativelanguage.googleapis.com"))
+            geminiUrl = "https://openrouter.ai/api/v1/chat/completions";
+        if (string.IsNullOrEmpty(geminiModel) || !geminiModel.Contains("/") || geminiModel.Contains("gemini-2.0-flash"))
+            geminiModel = "google/gemma-3n-e2b-it:free";
+        if (string.IsNullOrEmpty(geminiEnvVarName) || geminiEnvVarName == "GEMINI_API_KEY")
+            geminiEnvVarName = "OPENROUTER_API_KEY";
+    }
 
     public void Interact()
     {
@@ -121,8 +131,8 @@ public class BerndAIController : MonoBehaviour, Interactable
             prompt = systemPrompt + prompt;
         }
 
-        // Build Gemini (Google Generative) request body
-        string body = "{\"contents\":[{\"parts\":[{\"text\":\"" + prompt.Replace("\"", "\\\"") + "\"}]}]}";
+        // Build OpenRouter chat-completions request body
+        string body = "{\"model\":\"" + geminiModel + "\",\"messages\":[{\"role\":\"user\",\"content\":\"" + prompt.Replace("\"", "\\\"") + "\"}]}";
 
         var request = new UnityWebRequest(geminiUrl, "POST");
         byte[] bodyRaw = Encoding.UTF8.GetBytes(body);
@@ -140,19 +150,30 @@ public class BerndAIController : MonoBehaviour, Interactable
         // Prefer a local secrets file when running in the Editor so keys are not stored in Inspector or source control.
         try
         {
-            string secretsPath = Path.Combine(Application.dataPath, "..", "Secrets", "gemini_key.txt");
-                if (File.Exists(secretsPath))
+            string secretsDir = Path.Combine(Application.dataPath, "..", "Secrets");
+            string primaryPath = Path.Combine(secretsDir, "openrouter_key.txt");
+            string legacyPath = Path.Combine(secretsDir, "gemini_key.txt");
+
+            if (File.Exists(primaryPath))
+            {
+                apiKey = File.ReadAllText(primaryPath).Trim();
+                if (!string.IsNullOrEmpty(apiKey))
                 {
-                    apiKey = File.ReadAllText(secretsPath).Trim();
-                    if (!string.IsNullOrEmpty(apiKey))
-                    {
-                        Debug.Log("[BerndAIController] Loaded Gemini API key from Secrets/gemini_key.txt (Editor-only).");
-                    }
+                    Debug.Log("[BerndAIController] Loaded OpenRouter API key from Secrets/openrouter_key.txt (Editor-only).");
                 }
+            }
+            else if (File.Exists(legacyPath))
+            {
+                apiKey = File.ReadAllText(legacyPath).Trim();
+                if (!string.IsNullOrEmpty(apiKey))
+                {
+                    Debug.Log("[BerndAIController] Loaded legacy key from Secrets/gemini_key.txt (Editor-only).");
+                }
+            }
         }
         catch (System.Exception ex)
         {
-            Debug.LogWarning("[BerndAIController] Failed reading Secrets/gemini_key.txt: " + ex.Message);
+            Debug.LogWarning("[BerndAIController] Failed reading Secrets/openrouter_key.txt: " + ex.Message);
         }
 #endif
 
@@ -162,7 +183,7 @@ public class BerndAIController : MonoBehaviour, Interactable
             apiKey = System.Environment.GetEnvironmentVariable(geminiEnvVarName);
             if (!string.IsNullOrEmpty(apiKey))
             {
-                Debug.Log("[BerndAIController] Loaded Gemini API key from environment variable '" + geminiEnvVarName + "'.");
+                Debug.Log("[BerndAIController] Loaded OpenRouter API key from environment variable '" + geminiEnvVarName + "'.");
             }
         }
 
@@ -172,19 +193,21 @@ public class BerndAIController : MonoBehaviour, Interactable
             apiKey = geminiApiKey;
             if (!string.IsNullOrEmpty(apiKey))
             {
-                Debug.Log("[BerndAIController] Using Gemini API key from Inspector (fallback).");
+                Debug.Log("[BerndAIController] Using OpenRouter API key from Inspector (fallback).");
             }
         }
 
         bool hasApiKey = !string.IsNullOrEmpty(apiKey);
-        Debug.Log($"[BerndAIController] Gemini API key present: {hasApiKey}");
+        Debug.Log($"[BerndAIController] OpenRouter API key present: {hasApiKey}");
         if (hasApiKey)
         {
-            request.SetRequestHeader("X-goog-api-key", apiKey);
+            request.SetRequestHeader("Authorization", "Bearer " + apiKey);
+            request.SetRequestHeader("HTTP-Referer", Application.absoluteURL);
+            request.SetRequestHeader("X-Title", Application.productName);
         }
         else
         {
-            Debug.LogWarning($"Bernd Gemini API key not set. Provide a key via Secrets/gemini_key.txt (Editor), environment variable '{geminiEnvVarName}', or Inspector field.");
+            Debug.LogWarning($"Bernd OpenRouter API key not set. Provide a key via Secrets/openrouter_key.txt (Editor), environment variable '{geminiEnvVarName}', or Inspector field.");
         }
 
         // Debug: log request details
@@ -270,57 +293,15 @@ public class BerndAIController : MonoBehaviour, Interactable
         if (request.result != UnityWebRequest.Result.Success)
         {
             dialogText.text = "Fehler: " + request.error;
-            // If we got a 403 Forbidden from Google, try sending the API key as a URL query parameter
-            if (request.responseCode == 403)
+            if (request.responseCode == 429)
             {
-                if (!hasApiKey)
-                {
-                    Debug.LogError("[BerndAIController] 403 PERMISSION_DENIED and no API key was provided. Set the GEMINI API key in the Inspector or as environment variable '" + geminiEnvVarName + "'.");
-                    Debug.LogError("Also ensure the Generative API is enabled for your Google Cloud project and billing is active.");
-                }
-                else
-                {
-                    Debug.Log("[BerndAIController] Received 403 Forbidden despite API key being present; retrying with API key as query parameter (will not log the key)");
-
-                    // build URL with key parameter (do not log the key)
-                    string urlWithKey = geminiUrl + (geminiUrl.Contains("?") ? "&" : "?") + "key=" + System.Uri.EscapeDataString(apiKey);
-
-                    var retryReq = new UnityWebRequest(urlWithKey, "POST");
-                    retryReq.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
-                    retryReq.downloadHandler = new DownloadHandlerBuffer();
-                    retryReq.SetRequestHeader("Content-Type", "application/json");
-                    // do not set X-goog-api-key header here (we use query param)
-
-                    yield return retryReq.SendWebRequest();
-                    Debug.Log($"[BerndAIController] retry.request.result={retryReq.result}, responseCode={retryReq.responseCode}, error={retryReq.error}");
-                    string retryText = retryReq.downloadHandler != null ? retryReq.downloadHandler.text : null;
-                    Debug.Log($"[BerndAIController] retry response body: {retryText}");
-
-                    // Attempt to parse retry response
-                    if (!string.IsNullOrEmpty(retryText))
-                    {
-                        try { finalResponse = ParseGeminiContent(retryText); } catch { finalResponse = null; }
-                    }
-
-                    if (retryReq.result == UnityWebRequest.Result.Success && !string.IsNullOrEmpty(finalResponse))
-                    {
-                        // use retry result
-                        dialog = new Dialog();
-                        // make escaped newlines/readable sequences human-friendly
-                        finalResponse = UnescapeCommonSequences(finalResponse);
-                        var lines = SplitTextIntoPages(finalResponse, 25);
-                        typeof(Dialog).GetField("lines", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                            .SetValue(dialog, lines);
-                        currentLine = 0;
-                        dialogText.text = lines[0];
-                        isWaitingForResponse = false;
-                        yield break;
-                    }
-                    else
-                    {
-                        Debug.LogError("[BerndAIController] Retry with API key (query param) failed or returned no content. Check project/API key permissions, enable Generative API and billing, or review key restrictions.");
-                    }
-                }
+                dialogText.text = "Rate Limit erreicht (429). Warte kurz oder nutze ein anderes Modell.";
+                Debug.LogWarning("[BerndAIController] OpenRouter 429 rate limit. Consider slower requests or non-free tier.");
+            }
+            else if (request.responseCode == 401 || request.responseCode == 403)
+            {
+                dialogText.text = "API Key fehlt oder ist ungültig.";
+                Debug.LogError("[BerndAIController] Authentication failed. Check OPENROUTER_API_KEY or Secrets/openrouter_key.txt.");
             }
         }
 

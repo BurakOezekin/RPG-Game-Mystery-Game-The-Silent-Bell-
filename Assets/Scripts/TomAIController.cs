@@ -41,15 +41,25 @@ public class TomAIController : MonoBehaviour, Interactable
     [SerializeField] InputField inputField;
     private Dialog dialog;
 
-    [Header("Gemini API Configuration (optional)")]
+    [Header("OpenRouter API Configuration (optional)")]
     [SerializeField] private string geminiApiKey = "";
-    [SerializeField] private string geminiModel = "gemini-2.0-flash";
-    [SerializeField] private string geminiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
-    [SerializeField] private string geminiEnvVarName = "GEMINI_API_KEY";
+        [SerializeField] private string geminiModel = "google/gemma-3n-e2b-it:free";
+    [SerializeField] private string geminiUrl = "https://openrouter.ai/api/v1/chat/completions";
+    [SerializeField] private string geminiEnvVarName = "OPENROUTER_API_KEY";
 
     private bool isDialogOpen = false;
     private bool isWaitingForResponse = false;
     private int currentLine = 0;
+
+    private void OnValidate()
+    {
+        if (string.IsNullOrEmpty(geminiUrl) || geminiUrl.Contains("generativelanguage.googleapis.com"))
+            geminiUrl = "https://openrouter.ai/api/v1/chat/completions";
+        if (string.IsNullOrEmpty(geminiModel) || !geminiModel.Contains("/") || geminiModel.Contains("gemini-2.0-flash"))
+            geminiModel = "google/gemma-3n-e2b-it:free";
+        if (string.IsNullOrEmpty(geminiEnvVarName) || geminiEnvVarName == "GEMINI_API_KEY")
+            geminiEnvVarName = "OPENROUTER_API_KEY";
+    }
 
     void Awake()
     {
@@ -326,7 +336,17 @@ public class TomAIController : MonoBehaviour, Interactable
             prompt = systemPrompt + prompt;
         }
 
-        string body = "{\"contents\":[{\"parts\":[{\"text\":\"" + prompt.Replace("\"", "\\\"") + "\"}]}]}";
+        // Ensure OpenRouter defaults even if the Inspector still holds old Google values
+        if (string.IsNullOrEmpty(geminiUrl) || geminiUrl.Contains("generativelanguage.googleapis.com"))
+        {
+            geminiUrl = "https://openrouter.ai/api/v1/chat/completions";
+        }
+        if (string.IsNullOrEmpty(geminiModel) || !geminiModel.Contains("/"))
+        {
+            geminiModel = "google/gemini-2.0-flash-exp:free";
+        }
+
+        string body = "{\"model\":\"" + geminiModel + "\",\"messages\":[{\"role\":\"user\",\"content\":\"" + prompt.Replace("\"", "\\\"") + "\"}]}";
 
         var request = new UnityWebRequest(geminiUrl, "POST");
         byte[] bodyRaw = Encoding.UTF8.GetBytes(body);
@@ -335,31 +355,40 @@ public class TomAIController : MonoBehaviour, Interactable
         request.SetRequestHeader("Content-Type", "application/json");
 
         string apiKey = null;
-#if UNITY_EDITOR
         try
         {
-            string secretsPath = Path.Combine(Application.dataPath, "..", "Secrets", "gemini_key.txt");
-            if (File.Exists(secretsPath))
+            string secretsDir = Path.Combine(Application.dataPath, "..", "Secrets");
+            string primaryPath = Path.Combine(secretsDir, "openrouter_key.txt");
+            string legacyPath = Path.Combine(secretsDir, "gemini_key.txt");
+
+            if (File.Exists(primaryPath))
             {
-                apiKey = File.ReadAllText(secretsPath).Trim();
+                apiKey = File.ReadAllText(primaryPath).Trim();
                 if (!string.IsNullOrEmpty(apiKey))
                 {
-                    Debug.Log("[TomAIController] Loaded Gemini API key from Secrets/gemini_key.txt (Editor-only).");
+                    Debug.Log("[TomAIController] Loaded OpenRouter API key from Secrets/openrouter_key.txt.");
+                }
+            }
+            else if (File.Exists(legacyPath))
+            {
+                apiKey = File.ReadAllText(legacyPath).Trim();
+                if (!string.IsNullOrEmpty(apiKey))
+                {
+                    Debug.Log("[TomAIController] Loaded legacy key from Secrets/gemini_key.txt.");
                 }
             }
         }
         catch (System.Exception ex)
         {
-            Debug.LogWarning("[TomAIController] Failed reading Secrets/gemini_key.txt: " + ex.Message);
+            Debug.LogWarning("[TomAIController] Failed reading Secrets/openrouter_key.txt: " + ex.Message);
         }
-#endif
 
         if (string.IsNullOrEmpty(apiKey) && !string.IsNullOrEmpty(geminiEnvVarName))
         {
             apiKey = System.Environment.GetEnvironmentVariable(geminiEnvVarName);
             if (!string.IsNullOrEmpty(apiKey))
             {
-                Debug.Log("[TomAIController] Loaded Gemini API key from environment variable '" + geminiEnvVarName + "'.");
+                Debug.Log("[TomAIController] Loaded OpenRouter API key from environment variable '" + geminiEnvVarName + "'.");
             }
         }
 
@@ -368,19 +397,21 @@ public class TomAIController : MonoBehaviour, Interactable
             apiKey = geminiApiKey;
             if (!string.IsNullOrEmpty(apiKey))
             {
-                Debug.Log("[TomAIController] Using Gemini API key from Inspector (fallback).");
+                Debug.Log("[TomAIController] Using OpenRouter API key from Inspector (fallback).");
             }
         }
 
         bool hasApiKey = !string.IsNullOrEmpty(apiKey);
-        Debug.Log($"[TomAIController] Gemini API key present: {hasApiKey}");
+        Debug.Log($"[TomAIController] OpenRouter API key present: {hasApiKey}");
         if (hasApiKey)
         {
-            request.SetRequestHeader("X-goog-api-key", apiKey);
+            request.SetRequestHeader("Authorization", "Bearer " + apiKey);
+            request.SetRequestHeader("HTTP-Referer", Application.absoluteURL);
+            request.SetRequestHeader("X-Title", Application.productName);
         }
         else
         {
-            Debug.LogWarning($"Gemini API key not set. Provide a key via Secrets/gemini_key.txt (Editor), environment variable '{geminiEnvVarName}', or Inspector field.");
+            Debug.LogWarning($"OpenRouter API key not set. Provide a key via Secrets/openrouter_key.txt (Editor), environment variable '{geminiEnvVarName}', or Inspector field.");
         }
 
         Debug.Log($"[TomAIController] Sending request to: {geminiUrl}");
@@ -459,49 +490,15 @@ public class TomAIController : MonoBehaviour, Interactable
         if (request.result != UnityWebRequest.Result.Success)
         {
             if (dialogText != null) dialogText.text = "Fehler: " + request.error;
-            if (request.responseCode == 403)
+            if (request.responseCode == 429)
             {
-                if (!hasApiKey)
-                {
-                    Debug.LogError("[TomAIController] 403 PERMISSION_DENIED and no API key was provided. Set the GEMINI API key.");
-                }
-                else
-                {
-                    Debug.Log("[TomAIController] Received 403 Forbidden despite API key; retrying with key as query param.");
-                    string urlWithKey = geminiUrl + (geminiUrl.Contains("?") ? "&" : "?") + "key=" + System.Uri.EscapeDataString(apiKey);
-
-                    var retryReq = new UnityWebRequest(urlWithKey, "POST");
-                    retryReq.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
-                    retryReq.downloadHandler = new DownloadHandlerBuffer();
-                    retryReq.SetRequestHeader("Content-Type", "application/json");
-
-                    yield return retryReq.SendWebRequest();
-                    Debug.Log($"[TomAIController] retry.request.result={retryReq.result}, responseCode={retryReq.responseCode}, error={retryReq.error}");
-                    string retryText = retryReq.downloadHandler != null ? retryReq.downloadHandler.text : null;
-                    Debug.Log($"[TomAIController] retry response body: {retryText}");
-
-                    if (!string.IsNullOrEmpty(retryText))
-                    {
-                        try { finalResponse = ParseGeminiContent(retryText); } catch { finalResponse = null; }
-                    }
-
-                    if (retryReq.result == UnityWebRequest.Result.Success && !string.IsNullOrEmpty(finalResponse))
-                    {
-                        dialog = new Dialog();
-                        finalResponse = UnescapeCommonSequences(finalResponse);
-                        var lines = SplitTextIntoPages(finalResponse, 25);
-                        typeof(Dialog).GetField("lines", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                            .SetValue(dialog, lines);
-                        currentLine = 0;
-                        if (dialogText != null) dialogText.text = lines[0];
-                        isWaitingForResponse = false;
-                        yield break;
-                    }
-                    else
-                    {
-                        Debug.LogError("[TomAIController] Retry with API key (query param) failed or returned no content.");
-                    }
-                }
+                if (dialogText != null) dialogText.text = "Rate Limit erreicht (429). Warte kurz oder nutze ein anderes Modell.";
+                Debug.LogWarning("[TomAIController] OpenRouter 429 rate limit. Consider spacing requests or switching model.");
+            }
+            else if (request.responseCode == 401 || request.responseCode == 403)
+            {
+                if (dialogText != null) dialogText.text = "API Key fehlt oder ist ungültig.";
+                Debug.LogError("[TomAIController] Authentication failed. Check OPENROUTER_API_KEY or Secrets/openrouter_key.txt.");
             }
         }
         else if (string.IsNullOrEmpty(finalResponse))
